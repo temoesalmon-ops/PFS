@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Décodeur PFS</title>
+<style>
+/* Charte inspirée de l'Application CCO : bandeau rouge, titres rouges, tableaux à bordures, en-têtes en capitales */
+:root{--bg:#f4f4f4;--panel:#fff;--ink:#333;--mute:#777;--line:#ddd;--head:#f7f7f7;
+--red:#d9534f;--redfg:#fff;--orange:#f0ad4e;--orangefg:#fff;--cyan:#5bc0de;--green:#2ecc40;--greenfg:#0b3d12;
+--acc:#d9534f;--accfg:#fff;--warn:#a94442;--warnbg:#f2dede;--ok:#3c763d;--okbg:#dff0d8;--sel:#fcf8e3;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1c1c1e;--panel:#262628;--ink:#e8e8e8;--mute:#a0a0a0;--line:#3d3d40;--head:#2e2e31;--red:#e0605c;--redfg:#fff;--orange:#f0ad4e;--orangefg:#2a1a00;--cyan:#5bc0de;--green:#2fb344;--greenfg:#04210a;--acc:#ef7a76;--accfg:#fff;--warn:#f0a3a1;--warnbg:#4a2523;--ok:#9fd99a;--okbg:#1f3a1f;--sel:#3a3520;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#1c1c1e;--panel:#262628;--ink:#e8e8e8;--mute:#a0a0a0;--line:#3d3d40;--head:#2e2e31;--red:#e0605c;--redfg:#fff;--orange:#f0ad4e;--orangefg:#2a1a00;--cyan:#5bc0de;--green:#2fb344;--greenfg:#04210a;--acc:#ef7a76;--accfg:#fff;--warn:#f0a3a1;--warnbg:#4a2523;--ok:#9fd99a;--okbg:#1f3a1f;--sel:#3a3520;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 "Helvetica Neue",Helvetica,Arial,sans-serif}
+.topbar{background:var(--red);color:var(--redfg);border-top:2px solid rgba(0,0,0,.15);box-shadow:0 2px 4px rgba(0,0,0,.2)}
+.topbar div{max-width:1200px;margin:0 auto;padding:12px 16px;display:flex;align-items:baseline;gap:10px;font-size:1.15rem}
+.topbar b{font-weight:500}
+.topbar small{font-size:.75rem;opacity:.85}
+main{max-width:1200px;margin:0 auto;padding:14px 16px 48px}
+.titre{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:10px 14px;margin-bottom:14px}
+h1{font-size:2rem;font-weight:300;color:var(--red);margin:0}
+h2{font-size:1.35rem;font-weight:400;margin:24px 0 10px}
+.sub{color:var(--mute);margin:0 0 20px;max-width:62ch}
+textarea{width:100%;min-height:170px;font:13px/1.4 Consolas,Menlo,monospace;background:var(--panel);color:var(--ink);border:1px solid #ccc;border-radius:4px;padding:10px;resize:vertical;box-shadow:inset 0 1px 1px rgba(0,0,0,.075)}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:10px 0}
+button,.btn,select,input[type=search]{font:inherit;border-radius:4px;border:1px solid #ccc;background:var(--panel);color:var(--ink);padding:6px 12px;cursor:pointer}
+button:hover,.btn:hover{background:var(--head)}
+button.pri{background:var(--red);color:var(--redfg);border-color:var(--red)}
+button.pri:hover{filter:brightness(.92);background:var(--red)}
+button.exp{background:var(--orange);color:var(--orangefg);border-color:var(--orange)}
+button.exp:hover{filter:brightness(.92);background:var(--orange)}
+input[type=search]{cursor:text;min-width:200px;flex:1}
+input[type=file]{display:none}
+.msg{color:var(--mute);font-size:.88rem}
+.sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:12px}
+.box h3{margin:0 0 6px;font-size:1rem}
+.big{font-size:1.9rem;font-weight:700;line-height:1.1}
+.box.vol{border-left:6px solid var(--red);padding:14px 18px}
+.volid{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 16px;font-weight:700;line-height:1.05}
+.volno{font-size:clamp(2.2rem,8vw,3.2rem);color:var(--red)}
+.voldate{font-size:clamp(1.8rem,6.5vw,2.6rem)}
+.box.vol .msg{margin-top:6px;font-size:1rem}
+.tag{display:inline-block;border-radius:3px;padding:1px 7px;font-size:.78rem;font-weight:700;background:var(--green);color:var(--greenfg);margin:1px 2px 1px 0;white-space:nowrap}
+.tag.warn{background:var(--red);color:var(--redfg)}
+.tag.ok{background:var(--green);color:var(--greenfg)}
+.scroll{overflow-x:auto;background:var(--panel)}
+table{border-collapse:collapse;width:100%;min-width:640px;border:1px solid var(--line)}
+th,td{text-align:center;padding:8px 10px;border:1px solid var(--line);vertical-align:middle}
+th{font-size:.82rem;color:var(--ink);font-weight:700;text-transform:uppercase;position:sticky;top:0;background:var(--panel);border-bottom:2px solid var(--line)}
+td:nth-child(4){text-align:left}
+.pnr{font-family:Consolas,Menlo,monospace;font-weight:700;letter-spacing:.03em}
+button.pnr{padding:2px 8px;border:1px solid #ccc;border-radius:3px;font-size:.95rem;background:var(--head)}
+button.pnr:hover{border-color:var(--red);color:var(--red)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#333;color:#fff;padding:8px 14px;border-radius:4px;font-size:.9rem;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.on{opacity:1}
+tr.flag td{background:var(--warnbg)}
+details{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:10px 14px;margin-top:24px}
+summary{cursor:pointer;font-size:1.1rem}
+dl{margin:10px 0 0;display:grid;grid-template-columns:max-content 1fr;gap:4px 14px}
+dt{font-weight:700;color:var(--red)}
+dd{margin:0}
+.hid{display:none}
+</style>
+</head>
+<body>
+<header class="topbar"><div><b>Décodeur PFS</b><small>Contrôle réservation</small></div></header>
+<main>
+<div id="volbox" class="hid" style="margin-bottom:16px"><div class="sum" id="flights"></div></div>
+<div id="out" class="hid">
+<h2>Dossiers (PNRs)</h2>
+<div class="row">
+<input type="search" id="q" placeholder="Filtrer par nom ou PNR" aria-label="Filtrer">
+<select id="fs" aria-label="Statut"></select>
+</div>
+<div class="row">
+<button id="cp1">Copier les PNRs</button>
+<span class="msg" id="n"></span>
+</div>
+<div class="scroll"><table>
+<thead><tr><th>Dest.</th><th>PNR</th><th>Pax</th><th>Passagers</th><th>Cabine</th><th>Statut</th></tr></thead>
+<tbody id="tb"></tbody></table></div>
+<h2>Statuts présents dans ce PFS</h2>
+<dl id="defs"></dl>
+</div>
+
+<textarea id="in" aria-label="Texte du PFS"></textarea>
+<div class="row">
+<button class="pri" id="go">Analyser</button>
+<button id="clr">Effacer</button>
+<span class="msg" id="status"></span>
+</div>
+
+<details>
+<summary>Lexique des codes</summary>
+<h3 style="margin:0 0 6px;font-size:1rem">Statuts des passagers</h3><dl id="lex"></dl></details>
+</main>
+<div class="toast" id="toast" aria-live="polite"></div>
+
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+var esc=function(s){return String(s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})};
+var TITLES=["MSTR","MISS","MRS","MR","MS"];
+var rows=[],groups=[],lastView=[];
+var DEF={
+"GOSHO":"Go show : passager embarqué suite à une demande de liste d’attente au comptoir (CKI URES). Selon Amadeus : client qui se présente avec un billet mais sans réservation confirmée sur ce vol (liste d’attente, places disponibles ou réservation sur un autre vol).",
+"NOREC":"Selon Amadeus (No Record) : client présent à l’enregistrement avec un billet apparemment valide, introuvable dans les systèmes. Selon votre feuille interne : passager confirmé en GAB (statut KL / HK / KK / RR) mais absent de la liste DCS.",
+"NOSHO":"No show : client avec une réservation confirmée qui ne s’enregistre pas, ou qui s’enregistre sans embarquer (Amadeus). Selon votre feuille : ne se présente pas à l’enregistrement de son vol.",
+"CHGFL":"Changement de vol au check-in.",
+"CHGSG":"Changement de segment.",
+"FQTVN":"Numéro FQTV modifié ou ajouté au check-in.",
+"IDPAD":"Passager GP non confirmé (R2 ou N2) accepté sur le vol, mais débarquable.",
+"CFMWL":"Passager en HL (GAB) confirmé au check-in. À la fermeture du vol, son statut GAB passe en KL.",
+"GOSHWN":"Passager enregistré en URES puis débarqué.",
+"OFFLK":"Passager réservé et confirmé (GAB et PS), enregistré puis débarqué.",
+"OFFLN":"Passager NOREC enregistré puis débarqué.",
+"GOSHN":"Code absent de votre liste de définitions (peut-être proche de GOSHWN), à confirmer."
+};
+Object.assign(DEF,{
+"GOSHO":"Go show : passager avec billet open, sans réservation confirmée sur ce vol. Selon votre feuille : embarqué suite à une demande de liste d’attente au comptoir (CKI URES).",
+"GOSHN":"Group No Show : groupe qui ne s’est pas présenté (d’après votre document annoté).",
+"NOREC":"Billet réservé (OK) dont le nom ne figure pas sur le PNL/ADL. Selon votre feuille : confirmé en GAB (KL / HK / KK / RR) mais absent de la liste DCS.",
+"NOSHO":"No show : passager réservé qui ne s’est pas enregistré.",
+"CFMWL":"Confirmé depuis la liste d’attente. Selon votre feuille : passager en HL confirmé au check-in ; à la fermeture du vol, son statut GAB passe en KL.",
+"CHGCL":"Changement de classe par rapport à la réservation (surclassement ou déclassement).",
+"CHGFL":"Changement de vol dû à une irrégularité (recheck).",
+"CHGSG":"Changement de segment par rapport à la réservation.",
+"FQTVN":"Numéro de grand voyageur (FQTV) modifié ou ajouté au check-in.",
+"IDPAD":"Passager employé en places disponibles. Selon votre feuille : passager GP non confirmé (R2 ou N2) accepté sur le vol, mais débarquable.",
+"INVOL":"Surclassé ou déclassé vers un autre compartiment de façon involontaire.",
+"OFFLK":"Passager réservé, enregistré puis débarqué.",
+"OFFLN":"Passager NOREC enregistré puis débarqué."
+});
+Object.assign(DEF,{
+"CFMWL":"Confirm from waitlist.",
+"CHGCL":"Change of class from RES booking (upgrade/downgrade).",
+"CHGFL":"Change of flight due to flight irregularity (recheck).",
+"CHGSG":"Change of segment from RES booking.",
+"GOSHO":"Go Show. Open ticket passenger.",
+"GOSHN":"Group No Show.",
+"FQTVN":"Frequent flyer number changed or added at check-in.",
+"IDPAD":"Space available staff passenger.",
+"INVOL":"Upgraded or downgraded to a different compartment involuntarily.",
+"NOREC":"Booked (OK) ticket but name not on PNL/ADL.",
+"NOSHO":"Booked passenger that did not check-in.",
+"OFFLK":"Booked passenger that was checked-in, then offloaded.",
+"OFFLN":"NOREC passenger that was checked-in, then offloaded."
+});
+delete DEF.GOSHWN;
+DEF={
+"CFMWL":"Passager confirmé depuis la liste d’attente. Au check-in, il passe de HL à confirmé ; à la fermeture du vol, son statut GAB passe en KL.",
+"CHGCL":"Changement de classe par rapport à la réservation (surclassement ou déclassement).",
+"CHGFL":"Changement de vol au check-in, dû à une irrégularité du vol (recheck).",
+"CHGSG":"Changement de segment par rapport à la réservation.",
+"FQTVN":"Numéro de grand voyageur (FQTV) modifié ou ajouté au check-in.",
+"GOSHN":"Group No Show : groupe qui ne s’est pas présenté.",
+"GOSHO":"Go show : passager avec billet open, embarqué suite à une demande de liste d’attente au comptoir (CKI URES).",
+"GOSHWN":"Passager enregistré en URES puis débarqué.",
+"IDPAD":"Passager employé en places disponibles : passager GP non confirmé (R2 ou N2) accepté sur le vol, mais débarquable.",
+"INVOL":"Surclassé ou déclassé vers un autre compartiment de façon involontaire.",
+"NOREC":"Passager confirmé en GAB (KL / HK / KK / RR) dont le nom n’apparaît pas sur le PNL/ADL ni sur la liste DCS.",
+"NOSHO":"No show : passager réservé qui ne s’est pas présenté à l’enregistrement de son vol.",
+"OFFLK":"Passager réservé et confirmé (GAB et PS), enregistré puis débarqué.",
+"OFFLN":"Passager NOREC enregistré puis débarqué."
+};
+DEF={
+"CFMWL":"Passager confirmé à la fermeture du vol mais qui était déjà en HL avant check-in.",
+"CHGCL":"Changement de classe par rapport à la réservation.",
+"CHGFL":"Changement de vol au check-in, dû à une irrégularité du vol. (DISRUPT)",
+"CHGSG":"Changement de segment par rapport à la réservation. (PPTRFPMAU iso PPTMAU)",
+"FQTVN":"Numéro FQTV modifié ou ajouté au check-in.",
+"GOSHN":"Passager GOSHO enregistré puis non accepté.",
+"GOSHO":"Passager confirmé à la fermeture du vol qui s’est ajouté en HL au check-in.",
+"IDPAD":"GP R2 accepté sur le vol, mais débarquable.",
+"INVOL":"Modification de Cabine (surclassement ou déclassement) de façon involontaire.",
+"NOREC":"Passager confirmé mais qui n’apparaît pas sur la PNL.",
+"NOSHO":"No show : passager réservé qui ne s’est pas présenté à l’enregistrement de son vol.",
+"OFFLK":"Passager réservé, confirmé et enregistré puis débarqué.",
+"OFFLN":"Passager NOREC enregistré puis débarqué."
+};
+var WARN=["NOREC","NOSHO","GOSHO","CFMWL"];
+function isWarn(s){return WARN.indexOf(s)>=0}
+
+function splitTitle(f){
+  for(var i=0;i<TITLES.length;i++){var t=TITLES[i];
+    if(f.length>t.length+1&&f.slice(-t.length)===t)return [f.slice(0,-t.length),t];}
+  return [f,""];
+}
+
+function parse(text){
+  var lines=text.split(/\r?\n/).map(function(l){return l.trim()}).filter(Boolean);
+  var flights=[],decl={},raw=[],dest=null,cat=null,cabin=null,cur=null,m;
+  lines.forEach(function(l){
+    if(l==="PFS"||l==="ENDPFS"){cur=null;return}
+    if(m=l.match(/^([A-Z0-9]{2}\d{1,4})\/(\d{2}[A-Z]{3})\s+([A-Z]{3})(?:\s+PART(\d+))?/)){
+      flights.push({no:m[1],date:m[2],from:m[3],part:m[4]||"1"});dest=null;cat=null;cur=null;return}
+    if(m=l.match(/^-([A-Z]{3})$/)){dest=m[1];cat=null;cur=null;return}
+    if(m=l.match(/^([A-Z]{3}) (\d+)\/(\d+)$/)){
+      var d=decl[m[1]]||(decl[m[1]]={c:0,y:0});d.c+=+m[2];d.y+=+m[3];return}
+    if(m=l.match(/^([A-Z]{4,6}) (\d+)([A-Z])$/)){cat=m[1];cabin=m[3];cur=null;return}
+    if(m=l.match(/^(\d+)([^\/]+)\/(.+)$/)){
+      var ft=splitTitle(m[3]);
+      cur={dest:dest||"?",cat:cat||"?",cabin:cabin||"?",sn:m[2].trim(),fn:ft[0].trim(),title:ft[1],pnr:"",docs:{}};
+      raw.push(cur);return}
+    if(!cur)return;
+    if(m=l.match(/^\.L\/(\w+)/)){cur.pnr=m[1];return}
+    if(m=l.match(/^\.R\/(\w+)/)){cur.docs[m[1]]=1}
+  });
+  // fusion des doublons (même passager listé dans APIPX et GOSHO)
+  var map={},pax=[];
+  raw.forEach(function(r){
+    var k=[r.dest,r.pnr,r.sn,r.fn].join("|"),e=map[k];
+    if(!e){e=map[k]={dest:r.dest,pnr:r.pnr,sn:r.sn,fn:r.fn,title:r.title,cat:r.cat,cabin:r.cabin,docs:{}};pax.push(e)}
+    else if(e.cat==="APIPX"&&r.cat!=="APIPX"){e.cat=r.cat;e.cabin=r.cabin}
+    for(var d in r.docs)e.docs[d]=1;
+  });
+  return {flights:flights,decl:decl,pax:pax,rawCount:raw.length};
+}
+
+function build(res){
+  var gm={},list=[];
+  res.pax.forEach(function(p){
+    var k=p.dest+"|"+p.pnr,g=gm[k];
+    if(!g){g=gm[k]={dest:p.dest,pnr:p.pnr||"(aucun)",pax:[],cats:{},cabins:{}};list.push(g)}
+    g.pax.push(p);g.cats[p.cat]=1;g.cabins[p.cabin]=1;
+  });
+  return list;
+}
+
+function render(res){
+  rows=res.pax;groups=build(res);
+  var fl=res.flights.map(function(f){return '<div class="box vol"><div class="volid"><span class="volno">'+esc(f.no)+'</span><span class="voldate">'+esc(f.date)+'</span></div><div class="msg">Départ '+esc(f.from)+' · partie '+esc(f.part)+'</div></div>'}).join("");
+  $("flights").innerHTML=fl;$("volbox").classList.remove("hid");
+
+  var dests=[];rows.forEach(function(p){if(dests.indexOf(p.dest)<0)dests.push(p.dest)});
+
+  var cs=[];rows.forEach(function(p){if(cs.indexOf(p.cat)<0)cs.push(p.cat)});
+  fill($("fs"),"Tous statuts",cs);
+  $("defs").innerHTML=cs.filter(function(c){return DEF[c]}).map(function(c){return '<dt>'+esc(c)+'</dt><dd>'+esc(DEF[c])+'</dd>'}).join("");
+  $("out").classList.remove("hid");
+  table();
+}
+function fill(sel,all,vals){
+  sel.innerHTML='<option value="">'+all+'</option>'+vals.map(function(v){return '<option>'+esc(v)+'</option>'}).join("");
+}
+
+function statusOf(g){var k=Object.keys(g.cats);var real=k.filter(function(c){return c!=="APIPX"});return real.length?real:k}
+
+function table(){
+  var q=$("q").value.trim().toLowerCase(),fs=$("fs").value;
+  lastView=groups.filter(function(g){
+    if(fs&&statusOf(g).indexOf(fs)<0)return false;
+    if(q){var hay=(g.pnr+" "+g.pax.map(function(p){return p.sn+" "+p.fn}).join(" ")).toLowerCase();if(hay.indexOf(q)<0)return false}
+    return true;
+  });
+  // statuts à traiter en premier (ordre de WARN), puis les autres dans l'ordre du PFS
+  function rank(g){var r=99;statusOf(g).forEach(function(s){var i=WARN.indexOf(s);if(i>=0&&i<r)r=i});return r}
+  lastView=lastView.map(function(g,i){return {g:g,r:rank(g),i:i}}).sort(function(a,b){return a.r-b.r||a.i-b.i}).map(function(x){return x.g});
+  $("tb").innerHTML=lastView.map(function(g){
+    var st=statusOf(g),flag=st.some(isWarn);
+    return '<tr'+(flag?' class="flag"':'')+'><td>'+esc(g.dest)+'</td><td>'+(g.pnr==="(aucun)"?'<span class="msg">(aucun)</span>':'<button class="pnr" data-p="'+esc(g.pnr)+'" title="Copier RT'+esc(g.pnr)+'">'+esc(g.pnr)+'</button>')+'</td><td>'+g.pax.length+'</td><td>'+
+      g.pax.map(function(p){return esc(p.sn+" "+p.fn)}).join("<br>")+'</td><td>'+Object.keys(g.cabins).map(esc).join(", ")+'</td><td>'+
+      st.map(function(s){return '<span class="tag'+(isWarn(s)?' warn':'')+'" title="'+esc(DEF[s]||"")+'">'+esc(s)+'</span>'}).join("")+'</td></tr>';
+  }).join("")||'<tr><td colspan="6" class="msg">Aucun dossier ne correspond au filtre.</td></tr>';
+  $("n").textContent=lastView.length+" dossier(s) affiché(s)";
+}
+
+function run(){
+  $("volbox").classList.add("hid");
+  var t=$("in").value;
+  if(!t.trim()){$("status").textContent="Collez d’abord le texte du PFS.";$("out").classList.add("hid");return}
+  var res=parse(t);
+  if(!res.pax.length){$("status").textContent="Aucun passager reconnu. Vérifiez que le texte vient bien d’un PFS.";$("out").classList.add("hid");return}
+  $("status").textContent=res.rawCount+" lignes passagers lues, "+res.pax.length+" passagers uniques.";
+  render(res);
+}
+
+function copy(t,btn){
+  var label=btn.textContent;
+  function done(){btn.textContent="Copié";setTimeout(function(){btn.textContent=label},1500)}
+  function fb(){var ta=document.createElement("textarea");ta.value=t;ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);ta.select();try{document.execCommand("copy")}catch(e){}ta.remove();done()}
+  try{navigator.clipboard.writeText(t).then(done,fb)}catch(e){fb()}
+}
+
+$("lex").innerHTML=Object.keys(DEF).map(function(c){return '<dt>'+c+'</dt><dd>'+esc(DEF[c])+'</dd>'}).join("");
+$("go").onclick=run;
+$("in").addEventListener("paste",function(){setTimeout(run,50)});
+$("clr").onclick=function(){$("in").value="";$("volbox").classList.add("hid");$("out").classList.add("hid");$("status").textContent=""};
+$("q").oninput=table;$("fs").onchange=table;
+var tt;function toast(s){var e=$("toast");e.textContent=s;e.classList.add("on");clearTimeout(tt);tt=setTimeout(function(){e.classList.remove("on")},1600)}
+$("tb").addEventListener("click",function(e){
+  var b=e.target.closest("button.pnr");if(!b)return;
+  var t="RT"+b.getAttribute("data-p");
+  function ok(){toast(t+" copié")}
+  function fb(){var ta=document.createElement("textarea");ta.value=t;ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);ta.select();var r=false;try{r=document.execCommand("copy")}catch(x){}ta.remove();if(r)ok();else toast("Copie refusée par le navigateur")}
+  try{navigator.clipboard.writeText(t).then(ok,fb)}catch(x){fb()}
+});
+$("cp1").onclick=function(){copy(lastView.map(function(g){return g.pnr}).join("\n"),$("cp1"))};
+})();
+</script>
+</body>
+</html>
